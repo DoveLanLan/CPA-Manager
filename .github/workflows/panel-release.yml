@@ -1,0 +1,108 @@
+name: Panel Release
+
+on:
+  push:
+    tags:
+      - 'panel-v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: Release tag to create or update. Use panel-v* to avoid the upstream DockerHub release workflow.
+        required: true
+        default: panel-v1.3.3-dovelanlan.1
+
+permissions:
+  contents: write
+
+concurrency:
+  group: panel-release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-release-panel:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Resolve release tag
+        id: release
+        env:
+          INPUT_TAG_NAME: ${{ github.event.inputs.tag_name || '' }}
+        run: |
+          set -euo pipefail
+
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            tag="${GITHUB_REF_NAME}"
+          else
+            tag="${INPUT_TAG_NAME}"
+          fi
+
+          case "${tag}" in
+            panel-v*) ;;
+            *)
+              echo "Release tag must start with panel-v: ${tag}" >&2
+              exit 1
+              ;;
+          esac
+
+          version="${tag#panel-}"
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run type-check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build all-in-one HTML
+        run: npm run build
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+
+      - name: Prepare panel asset
+        run: |
+          set -euo pipefail
+          cp dist/index.html dist/management.html
+          test -s dist/management.html
+          ls -lh dist/management.html
+
+      - name: Generate release notes
+        run: |
+          set -euo pipefail
+          {
+            echo "Panel-only release for ${{ steps.release.outputs.version }}"
+            echo
+            echo "- Commit: ${GITHUB_SHA}"
+          } > release-notes.md
+
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          files: dist/management.html
+          body_path: release-notes.md
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: true
+          overwrite_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

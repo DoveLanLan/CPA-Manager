@@ -369,6 +369,9 @@ go run ./cmd/cpa-manager
 - The same workflow builds `Dockerfile.usage-service` and pushes `seakee/cpa-manager`.
 - The Docker image is published for `linux/amd64` and `linux/arm64`.
 - The workflow syncs `README.md` to the Docker Hub overview.
+- Fork builds can publish GHCR images with `.github/workflows/ghcr-image.yml` to `ghcr.io/<owner>/cpa-manager`.
+- Main branch GHCR builds publish `main` and `sha-<commit>` tags. Production deployments should pin a `sha-<commit>` tag; `latest` is published only for `v*` tags.
+- If the GHCR package is private, the deployment host must run `docker login ghcr.io` before pulling the image.
 - The UI version shown on the System page is injected at build time, preferring `VERSION`, then git tag, then the `package.json` fallback.
 - Required GitHub secrets:
   - `DOCKERHUB_USERNAME`

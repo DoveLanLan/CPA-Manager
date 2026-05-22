@@ -365,6 +365,9 @@ go run ./cmd/cpa-manager
 - 同一个 workflow 会构建 `Dockerfile.usage-service` 并推送 `seakee/cpa-manager`
 - Docker 镜像会发布 `linux/amd64` 和 `linux/arm64`
 - workflow 会把 `README.md` 同步到 Docker Hub overview
+- fork 可以通过 `.github/workflows/ghcr-image.yml` 发布 GHCR 镜像到 `ghcr.io/<owner>/cpa-manager`
+- main 分支 GHCR 构建会发布 `main` 和 `sha-<commit>` 标签。生产部署建议固定 `sha-<commit>` 标签；`latest` 只会在 `v*` 标签发布时生成
+- 如果 GHCR package 是私有的，部署服务器需要先执行 `docker login ghcr.io` 再拉取镜像
 - 系统信息页显示的 UI 版本在构建期注入，优先使用 `VERSION`，其次使用 git tag，最后回退到 `package.json`
 - 必需 GitHub secrets：
   - `DOCKERHUB_USERNAME`

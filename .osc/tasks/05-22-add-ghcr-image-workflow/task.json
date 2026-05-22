@@ -1,0 +1,14 @@
+{
+  "name": "Add GHCR image workflow",
+  "type": "ci",
+  "branch": "main",
+  "priority": "P1",
+  "description": "Publish CPA-Manager Usage Service images to GitHub Container Registry for fork deployments.",
+  "depends_on": [],
+  "status": "done",
+  "current_phase": 0,
+  "next_action": [],
+  "requires_change_workflow": true,
+  "change_workflow_status": "closed",
+  "completed_at": "2026-05-22T00:00:00Z"
+}

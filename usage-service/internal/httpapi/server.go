@@ -889,7 +889,7 @@ func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
 			s.handleUsageExport(w, r)
 			return
 		}
-		events, err := s.store.RecentEvents(r.Context(), s.cfg.QueryLimit)
+		events, err := s.store.RecentEventsForPayload(r.Context(), s.cfg.QueryLimit)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return

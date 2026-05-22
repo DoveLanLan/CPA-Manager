@@ -167,6 +167,10 @@ const buildUrl = (base: string, path: string): string => {
   return `${normalized}${path}`;
 };
 
+type UsageServiceRequestOptions = {
+  signal?: AbortSignal;
+};
+
 const authHeaders = (managementKey?: string) =>
   managementKey ? { Authorization: `Bearer ${managementKey}` } : undefined;
 
@@ -271,10 +275,14 @@ const parseContentDispositionFilename = (value: string): string => {
 };
 
 export const usageServiceApi = {
-  getInfo: async (base: string): Promise<UsageServiceInfo> => {
+  getInfo: async (
+    base: string,
+    options: UsageServiceRequestOptions = {}
+  ): Promise<UsageServiceInfo> => {
     return withUsageServiceError(async () => {
       const response = await axios.get<UsageServiceInfo>(buildUrl(base, '/usage-service/info'), {
         timeout: USAGE_SERVICE_TIMEOUT_MS,
+        signal: options.signal,
       });
       return response.data;
     });
@@ -332,11 +340,16 @@ export const usageServiceApi = {
     });
   },
 
-  getUsage: async (base: string, managementKey?: string): Promise<UsagePayload> => {
+  getUsage: async (
+    base: string,
+    managementKey?: string,
+    options: UsageServiceRequestOptions = {}
+  ): Promise<UsagePayload> => {
     return withUsageServiceError(async () => {
       const response = await axios.get<UsagePayload>(buildUrl(base, '/v0/management/usage'), {
         timeout: USAGE_SERVICE_TIMEOUT_MS,
         headers: authHeaders(managementKey),
+        signal: options.signal,
       });
       return response.data;
     });

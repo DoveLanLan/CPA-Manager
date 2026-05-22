@@ -39,6 +39,12 @@ export interface UseUsageDataReturn {
   loadUsage: () => Promise<void>;
 }
 
+type UsageRequestState = {
+  key: string;
+  controller: AbortController;
+  promise: Promise<void>;
+};
+
 export function useUsageData(): UseUsageDataReturn {
   const apiBase = useAuthStore((state) => state.apiBase);
   const managementKey = useAuthStore((state) => state.managementKey);
@@ -53,8 +59,9 @@ export function useUsageData(): UseUsageDataReturn {
   const [usageServiceAvailable, setUsageServiceAvailable] = useState(false);
   const requestIdRef = useRef(0);
   const aliasRequestIdRef = useRef(0);
+  const usageRequestRef = useRef<UsageRequestState | null>(null);
 
-  const resolveUsageServiceBase = useCallback(async (): Promise<string> => {
+  const resolveUsageServiceBase = useCallback(async (signal?: AbortSignal): Promise<string> => {
     if (usageServiceEnabled && usageServiceBase) {
       return usageServiceBase;
     }
@@ -68,8 +75,9 @@ export function useUsageData(): UseUsageDataReturn {
     );
 
     for (const candidate of candidates) {
+      if (signal?.aborted) return '';
       try {
-        const info = await usageServiceApi.getInfo(candidate);
+        const info = await usageServiceApi.getInfo(candidate, { signal });
         if (isUsageServiceId(info.service)) {
           return candidate;
         }
@@ -174,33 +182,73 @@ export function useUsageData(): UseUsageDataReturn {
   }, [getApiKeyAliasesFromApi]);
 
   const loadUsage = useCallback(async () => {
+    const requestKey = JSON.stringify([
+      apiBase,
+      usageServiceEnabled,
+      usageServiceBase,
+      managementKey,
+    ]);
+    const inFlightRequest = usageRequestRef.current;
+    if (inFlightRequest) {
+      if (inFlightRequest.key === requestKey) {
+        return inFlightRequest.promise;
+      }
+      inFlightRequest.controller.abort();
+    }
+
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
-    setLoading(true);
-    setError('');
+    const controller = new AbortController();
+    const requestState: UsageRequestState = {
+      key: requestKey,
+      controller,
+      promise: Promise.resolve(),
+    };
+    usageRequestRef.current = requestState;
 
-    try {
-      const serviceBase = await resolveUsageServiceBase();
-      if (!serviceBase) {
-        setUsageServiceAvailable(false);
-        setUsage(null);
-        setLastRefreshedAt(null);
-        return;
+    requestState.promise = (async () => {
+      setLoading(true);
+      setError('');
+
+      try {
+        const serviceBase = await resolveUsageServiceBase(controller.signal);
+        if (controller.signal.aborted) return;
+        if (!serviceBase) {
+          setUsageServiceAvailable(false);
+          setUsage(null);
+          setLastRefreshedAt(null);
+          return;
+        }
+        setUsageServiceAvailable(true);
+        const payload = await usageServiceApi.getUsage(serviceBase, managementKey, {
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted || requestIdRef.current !== requestId) return;
+        setUsage(payload ?? null);
+        setLastRefreshedAt(new Date());
+      } catch (err) {
+        if (controller.signal.aborted || requestIdRef.current !== requestId) return;
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        if (usageRequestRef.current === requestState) {
+          usageRequestRef.current = null;
+        }
+        if (requestIdRef.current === requestId) {
+          setLoading(false);
+        }
       }
-      setUsageServiceAvailable(true);
-      const payload = await usageServiceApi.getUsage(serviceBase, managementKey);
-      if (requestIdRef.current !== requestId) return;
-      setUsage(payload ?? null);
-      setLastRefreshedAt(new Date());
-    } catch (err) {
-      if (requestIdRef.current !== requestId) return;
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      if (requestIdRef.current === requestId) {
-        setLoading(false);
-      }
-    }
-  }, [managementKey, resolveUsageServiceBase]);
+    })();
+
+    return requestState.promise;
+  }, [apiBase, managementKey, resolveUsageServiceBase, usageServiceBase, usageServiceEnabled]);
+
+  useEffect(() => {
+    return () => {
+      requestIdRef.current += 1;
+      usageRequestRef.current?.controller.abort();
+      usageRequestRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     void loadModelPricesFromStorage();

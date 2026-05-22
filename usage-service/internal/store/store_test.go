@@ -124,6 +124,75 @@ func TestStorePersistsRequestedAndResolvedModels(t *testing.T) {
 	}
 }
 
+func TestStoreCreatesRecentEventsSortIndex(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "usage.sqlite"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = db.Close()
+	})
+
+	var found int
+	if err := db.db.QueryRowContext(
+		context.Background(),
+		`select count(*) from sqlite_master where type = 'index' and name = 'idx_usage_events_timestamp_id_desc'`,
+	).Scan(&found); err != nil {
+		t.Fatalf("query index: %v", err)
+	}
+	if found != 1 {
+		t.Fatalf("idx_usage_events_timestamp_id_desc count = %d, want 1", found)
+	}
+}
+
+func TestRecentEventsForPayloadOmitsRawJSON(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "usage.sqlite"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = db.Close()
+	})
+
+	const rawJSON = `{"request":"large raw payload","api_key":"redacted"}`
+	_, err = db.InsertEvents(context.Background(), []usage.Event{
+		{
+			EventHash:   "event-with-raw-json",
+			TimestampMS: 1_778_000_002_000,
+			Timestamp:   "2026-05-06T00:00:02Z",
+			Model:       "gpt-test",
+			Endpoint:    "POST /v1/chat/completions",
+			RawJSON:     rawJSON,
+			CreatedAtMS: 1_778_000_002_100,
+		},
+	})
+	if err != nil {
+		t.Fatalf("insert events: %v", err)
+	}
+
+	events, err := db.RecentEventsForPayload(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("recent events for payload: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("len(events) = %d, want 1", len(events))
+	}
+	if events[0].RawJSON != "" {
+		t.Fatalf("payload RawJSON = %q, want empty", events[0].RawJSON)
+	}
+
+	fullEvents, err := db.RecentEvents(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("recent events: %v", err)
+	}
+	if len(fullEvents) != 1 {
+		t.Fatalf("len(fullEvents) = %d, want 1", len(fullEvents))
+	}
+	if fullEvents[0].RawJSON != rawJSON {
+		t.Fatalf("full RawJSON = %q, want %q", fullEvents[0].RawJSON, rawJSON)
+	}
+}
+
 func TestStoreAPIKeyAliases(t *testing.T) {
 	db, err := Open(filepath.Join(t.TempDir(), "usage.sqlite"))
 	if err != nil {

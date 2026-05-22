@@ -1,0 +1,19 @@
+{
+  "name": "Fix monitoring usage performance",
+  "type": "bugfix",
+  "branch": "main",
+  "priority": "P1",
+  "description": "Reduce /v0/management/usage query cost and prevent overlapping monitoring refresh requests.",
+  "depends_on": [
+    "05-22-add-ghcr-image-workflow"
+  ],
+  "status": "done",
+  "current_phase": 5,
+  "next_action": [
+    "Commit and push optimized monitoring changes",
+    "Wait for GHCR image build",
+    "Deploy pinned image to VPS and verify monitoring page"
+  ],
+  "requires_change_workflow": true,
+  "change_workflow_status": "accepted"
+}

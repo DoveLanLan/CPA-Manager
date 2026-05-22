@@ -147,6 +147,7 @@ func (s *Store) init() error {
 			created_at_ms integer not null
 		)`,
 		`create index if not exists idx_usage_events_timestamp on usage_events(timestamp_ms)`,
+		`create index if not exists idx_usage_events_timestamp_id_desc on usage_events(timestamp_ms desc, id desc)`,
 		`create index if not exists idx_usage_events_request_id on usage_events(request_id)`,
 		`create index if not exists idx_usage_events_model on usage_events(model)`,
 		`create index if not exists idx_usage_events_auth_index on usage_events(auth_index)`,
@@ -756,19 +757,32 @@ func (s *Store) AddDeadLetter(ctx context.Context, payload string, parseErr erro
 }
 
 func (s *Store) RecentEvents(ctx context.Context, limit int) ([]usage.Event, error) {
+	return s.recentEvents(ctx, limit, true)
+}
+
+func (s *Store) RecentEventsForPayload(ctx context.Context, limit int) ([]usage.Event, error) {
+	return s.recentEvents(ctx, limit, false)
+}
+
+func (s *Store) recentEvents(ctx context.Context, limit int, includeRawJSON bool) ([]usage.Event, error) {
 	if limit <= 0 {
 		limit = 50000
 	}
-	rows, err := s.db.QueryContext(ctx, `select
-		request_id, event_hash, timestamp_ms, timestamp, provider, model, endpoint, method, path,
-		auth_type, auth_index, source, source_hash, api_key_hash,
-		account_snapshot, auth_label_snapshot, auth_file_snapshot, auth_provider_snapshot, auth_project_id_snapshot, auth_snapshot_at_ms,
-		requested_model, resolved_model,
-		input_tokens, output_tokens, reasoning_tokens, cached_tokens, cache_tokens, total_tokens,
-		latency_ms, failed, raw_json, created_at_ms
-		from usage_events
-		order by timestamp_ms desc, id desc
-		limit ?`, limit)
+	rawJSONExpr := `null as raw_json`
+	if includeRawJSON {
+		rawJSONExpr = `raw_json`
+	}
+	query := fmt.Sprintf(`select
+			request_id, event_hash, timestamp_ms, timestamp, provider, model, endpoint, method, path,
+			auth_type, auth_index, source, source_hash, api_key_hash,
+			account_snapshot, auth_label_snapshot, auth_file_snapshot, auth_provider_snapshot, auth_project_id_snapshot, auth_snapshot_at_ms,
+			requested_model, resolved_model,
+			input_tokens, output_tokens, reasoning_tokens, cached_tokens, cache_tokens, total_tokens,
+			latency_ms, failed, %s, created_at_ms
+			from usage_events
+			order by timestamp_ms desc, id desc
+			limit ?`, rawJSONExpr)
+	rows, err := s.db.QueryContext(ctx, query, limit)
 	if err != nil {
 		return nil, err
 	}

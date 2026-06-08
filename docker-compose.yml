@@ -1,9 +1,7 @@
 services:
   cpa-manager:
-    build:
-      context: .
-      dockerfile: Dockerfile.usage-service
     image: seakee/cpa-manager:latest
+    container_name: cpa-manager
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -11,6 +9,7 @@ services:
       - "18317:18317"
     environment:
       HTTP_ADDR: "0.0.0.0:18317"
+      USAGE_DATA_DIR: "/data"
       USAGE_DB_PATH: "/data/usage.sqlite"
       USAGE_COLLECTOR_MODE: "auto"
       USAGE_RESP_QUEUE: "usage"
@@ -29,3 +28,4 @@ services:
 
 volumes:
   cpa-manager-data:
+    name: cpa-manager-data

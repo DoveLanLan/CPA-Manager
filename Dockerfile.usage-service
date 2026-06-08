@@ -13,6 +13,10 @@ WORKDIR /src
 COPY usage-service ./usage-service
 COPY --from=web-build /app/dist/index.html ./usage-service/internal/httpapi/web/management.html
 WORKDIR /src/usage-service
+ARG GOPROXY="https://goproxy.cn|direct"
+ARG GOSUMDB="sum.golang.google.cn"
+ENV GOPROXY="${GOPROXY}"
+ENV GOSUMDB="${GOSUMDB}"
 RUN go mod download
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o /out/cpa-manager ./cmd/cpa-manager
 
